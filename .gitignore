@@ -1,4 +1,4 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
 .venv/
 venv/
@@ -7,3 +7,4 @@ presupuestos/
 *.zip
 *.bak
 .streamlit/secrets.toml
+prueba_stripe.py
