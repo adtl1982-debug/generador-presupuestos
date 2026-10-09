@@ -70,11 +70,17 @@ def mostrar_presupuesto(df, total, iva=21.0):
     print("TOTAL: " + format(total_final, ".2f") + " EUR")
 
 
-def crear_pdf(df, total, ruta="presupuesto.pdf", cliente="", numero="", iva=21.0, emisor="", notas="", oficio="", extras="", logo=None):
+def crear_pdf(df, total, ruta="presupuesto.pdf", cliente="", numero="", iva=21.0, emisor="", notas="", oficio="", extras="", logo=None, marca_agua=False):
     cuota, total_final = calcular_iva(total, iva)
     fecha = datetime.date.today().strftime("%d/%m/%Y")
     pdf = FPDF()
     pdf.add_page()
+    if marca_agua:
+        pdf.set_font("Helvetica", "B", 48)
+        pdf.set_text_color(215, 215, 215)
+        with pdf.rotation(angle=45, x=105, y=150):
+            pdf.text(21, 150, "VERSION GRATUITA")
+        pdf.set_text_color(0, 0, 0)
     if logo:
         try:
             pdf.image(io.BytesIO(logo), x=10, y=10, h=20)
@@ -144,3 +150,4 @@ if __name__ == "__main__":
     mostrar_presupuesto(df, total)
     crear_pdf(df, total, cliente="Cliente de prueba", numero="PRUEBA")
     print("\nPDF creado: presupuesto.pdf")
+

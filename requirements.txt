@@ -2,3 +2,4 @@
 pandas
 fpdf2
 pillow
+stripe

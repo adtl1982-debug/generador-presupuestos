@@ -3,9 +3,11 @@ import pandas as pd
 import streamlit as st
 from presupuesto import calcular, crear_pdf, calcular_iva
 from oficios import OFICIOS
+from pago import LIMITE_GRATIS, enlace_pago, es_premium
 
-st.set_page_config(page_title="Generador de presupuestos", page_icon="🧾")
-st.title("🧾 Generador de presupuestos")
+st.set_page_config(page_title="Estimio")
+st.title("Estimio")
+st.caption("Presupuestos profesionales en PDF, en un minuto.")
 
 COLS = ["producto", "unidad", "precio", "cantidad", "descuento"]
 
@@ -29,6 +31,24 @@ if "base" not in st.session_state:
     st.session_state.version = 0
     st.session_state.n = 1
     st.session_state.historial = []
+    st.session_state.generados = 0
+    st.session_state.premium = False
+
+st.sidebar.header("Tu plan")
+if st.session_state.premium:
+    st.sidebar.success("Estimio Pro activo")
+else:
+    restantes = max(LIMITE_GRATIS - st.session_state.generados, 0)
+    st.sidebar.write("Plan gratis: te quedan " + str(restantes) + " de " + str(LIMITE_GRATIS) + " presupuestos")
+    if enlace_pago():
+        st.sidebar.link_button("Hazte Pro 6,99 EUR/mes", enlace_pago())
+    email_pro = st.sidebar.text_input("Email con el que pagaste")
+    if st.sidebar.button("Activar Pro"):
+        if es_premium(email_pro):
+            st.session_state.premium = True
+            st.rerun()
+        else:
+            st.sidebar.error("No encuentro una suscripcion activa con ese email.")
 
 oficio = st.selectbox("Oficio", list(OFICIOS.keys()), key="oficio", on_change=cambiar_oficio)
 datos = OFICIOS[oficio]
@@ -58,23 +78,34 @@ editado = editado.dropna(how="all")
 notas = st.text_area("Notas y condiciones de pago", value=datos["notas"], height=100)
 
 if st.button("Generar presupuesto", type="primary"):
-    try:
-        df, total = calcular(editado)
-    except ValueError as e:
-        st.error(str(e))
+    limite = (not st.session_state.premium) and st.session_state.generados >= LIMITE_GRATIS
+    if limite:
+        st.warning("Has usado tus " + str(LIMITE_GRATIS) + " presupuestos gratis. Hazte Pro para seguir sin limite y sin marca de agua.")
+        if enlace_pago():
+            st.link_button("Ir a Estimio Pro", enlace_pago())
     else:
-        cuota, total_final = calcular_iva(total, iva)
-        st.dataframe(df, width="stretch")
-        st.write("Base imponible: " + format(total, ".2f") + " EUR")
-        st.write("IVA " + str(iva) + "%: " + format(cuota, ".2f") + " EUR")
-        st.success("TOTAL: " + format(total_final, ".2f") + " EUR")
-        extras = "\n".join(k + ": " + v for k, v in extras_vals.items() if v.strip())
-        nombre = "presupuesto_" + numero.replace("/", "-") + ".pdf"
-        pdf_bytes = crear_pdf(df, total, None, cliente, numero, iva, emisor, notas, oficio, extras, logo)
-        if numero == sugerido:
-            st.session_state.n += 1
-        st.session_state.historial.insert(0, (nombre, pdf_bytes))
-        st.download_button("Descargar PDF", pdf_bytes, file_name=nombre, mime="application/pdf", key="descarga_actual")
+        try:
+            df, total = calcular(editado)
+        except ValueError as e:
+            st.error(str(e))
+        else:
+            cuota, total_final = calcular_iva(total, iva)
+            st.dataframe(df, width="stretch")
+            st.write("Base imponible: " + format(total, ".2f") + " EUR")
+            st.write("IVA " + str(iva) + "%: " + format(cuota, ".2f") + " EUR")
+            st.success("TOTAL: " + format(total_final, ".2f") + " EUR")
+            extras = "\n".join(k + ": " + v for k, v in extras_vals.items() if v.strip())
+            nombre = "presupuesto_" + numero.replace("/", "-") + ".pdf"
+            marca = not st.session_state.premium
+            pdf_bytes = crear_pdf(df, total, None, cliente, numero, iva, emisor, notas, oficio, extras, logo, marca)
+            if numero == sugerido:
+                st.session_state.n += 1
+            st.session_state.generados += 1
+            st.session_state.historial.insert(0, (nombre, pdf_bytes))
+            st.download_button("Descargar PDF", pdf_bytes, file_name=nombre, mime="application/pdf", key="descarga_actual")
+            if marca:
+                faltan = max(LIMITE_GRATIS - st.session_state.generados, 0)
+                st.info("Plan gratis: te quedan " + str(faltan) + " presupuestos. El PDF lleva marca de agua.")
 
 st.sidebar.header("Presupuestos de esta sesión")
 if not st.session_state.historial:
