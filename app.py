@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 from presupuesto import calcular, crear_pdf, calcular_iva
 from oficios import OFICIOS
-from pago import LIMITE_GRATIS, enlace_pago, es_premium
+from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo
 
 st.set_page_config(page_title="Estimio")
 st.title("Estimio")
@@ -43,12 +43,20 @@ else:
     if enlace_pago():
         st.sidebar.link_button("Hazte Pro 6,99 EUR/mes", enlace_pago())
     email_pro = st.sidebar.text_input("Email con el que pagaste")
+    if st.sidebar.button("Enviar codigo"):
+        ok, msg = enviar_codigo(email_pro)
+        if ok:
+            st.sidebar.info(msg)
+        else:
+            st.sidebar.error(msg)
+    codigo_pro = st.sidebar.text_input("Codigo de 6 digitos", max_chars=6)
     if st.sidebar.button("Activar Pro"):
-        if es_premium(email_pro):
+        ok, msg = verificar_codigo(email_pro, codigo_pro)
+        if ok:
             st.session_state.premium = True
             st.rerun()
         else:
-            st.sidebar.error("No encuentro una suscripcion activa con ese email.")
+            st.sidebar.error(msg)
 
 oficio = st.selectbox("Oficio", list(OFICIOS.keys()), key="oficio", on_change=cambiar_oficio)
 datos = OFICIOS[oficio]
