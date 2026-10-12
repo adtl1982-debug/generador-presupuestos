@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 from presupuesto import calcular, crear_pdf, calcular_iva
 from oficios import OFICIOS
-from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo
+from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo, url_portal
 
 st.set_page_config(page_title="Estimio")
 st.title("Estimio")
@@ -37,6 +37,12 @@ if "base" not in st.session_state:
 st.sidebar.header("Tu plan")
 if st.session_state.premium:
     st.sidebar.success("Estimio Pro activo")
+    if st.sidebar.button("Gestionar suscripcion"):
+        u = url_portal(st.session_state.get("email_ok", ""), "https://estimio.streamlit.app")
+        if u:
+            st.sidebar.link_button("Abrir portal de Stripe", u)
+        else:
+            st.sidebar.error("No he podido abrir el portal. Intentalo de nuevo.")
 else:
     restantes = max(LIMITE_GRATIS - st.session_state.generados, 0)
     st.sidebar.write("Plan gratis: te quedan " + str(restantes) + " de " + str(LIMITE_GRATIS) + " presupuestos")
@@ -54,6 +60,7 @@ else:
         ok, msg = verificar_codigo(email_pro, codigo_pro)
         if ok:
             st.session_state.premium = True
+            st.session_state.email_ok = email_pro.strip().lower()
             st.rerun()
         else:
             st.sidebar.error(msg)

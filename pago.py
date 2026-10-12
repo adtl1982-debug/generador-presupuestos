@@ -105,3 +105,21 @@ def verificar_codigo(email, codigo):
         return False, "Codigo incorrecto."
     s.pop("cod_hash", None)
     return True, ""
+
+
+def url_portal(email, volver):
+    clave = _secreto("STRIPE_SECRET_KEY")
+    email = (email or "").strip().replace('"', "")
+    if not clave or not email:
+        return ""
+    stripe.api_key = clave
+    try:
+        clientes = stripe.Customer.search(query='email:"' + email + '"')
+        for c in clientes.data:
+            subs = stripe.Subscription.list(customer=c.id, status="active", limit=1)
+            if subs.data:
+                s = stripe.billing_portal.Session.create(customer=c.id, return_url=volver)
+                return s.url
+    except Exception:
+        return ""
+    return ""
