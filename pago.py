@@ -1,6 +1,7 @@
 ﻿import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 import urllib.request
@@ -13,6 +14,27 @@ CODIGO_VALIDEZ = 600
 MAX_ENVIOS = 3
 MAX_INTENTOS = 5
 ESPERA_ENVIO = 60
+MAX_ENVIOS_EMAIL_HORA = 3
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+
+
+@st.cache_resource
+def _registro_envios():
+    return {}
+
+
+def _limite_email(email):
+    ahora = time.time()
+    reg = _registro_envios()
+    for k in [k for k, v in reg.items() if not v or ahora - v[-1] > 3600]:
+        reg.pop(k, None)
+    veces = [x for x in reg.get(email, []) if ahora - x < 3600]
+    if len(veces) >= MAX_ENVIOS_EMAIL_HORA:
+        reg[email] = veces
+        return False
+    veces.append(ahora)
+    reg[email] = veces
+    return True
 
 
 def _secreto(nombre):
@@ -72,7 +94,7 @@ def _enviar_email(email, codigo):
 
 def enviar_codigo(email):
     email = (email or "").strip().lower()
-    if "@" not in email or "." not in email:
+    if len(email) > 254 or not EMAIL_RE.match(email):
         return False, "Escribe un email valido."
     s = st.session_state
     ahora = time.time()
@@ -82,6 +104,8 @@ def enviar_codigo(email):
         return False, "Espera un minuto antes de pedir otro codigo."
     s["cod_envios"] = s.get("cod_envios", 0) + 1
     s["cod_ultimo"] = ahora
+    if not _limite_email(email):
+        return False, "Has pedido demasiados codigos para ese email. Intentalo mas tarde."
     if es_premium(email):
         codigo = format(secrets.randbelow(1000000), "06d")
         if _enviar_email(email, codigo):
