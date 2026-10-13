@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 from presupuesto import calcular, crear_pdf, calcular_iva
 from oficios import OFICIOS
-from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo, url_portal
+from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo, url_portal, es_premium, usados_gratis, usar_gratis
 
 st.set_page_config(page_title="Estimio")
 st.title("Estimio")
@@ -34,21 +34,13 @@ if "base" not in st.session_state:
     st.session_state.generados = 0
     st.session_state.premium = False
 
+st.session_state.setdefault("email_ok", "")
+st.session_state.setdefault("usados", None)
+
 st.sidebar.header("Tu plan")
-if st.session_state.premium:
-    st.sidebar.success("Estimio Pro activo")
-    if st.sidebar.button("Gestionar suscripcion"):
-        u = url_portal(st.session_state.get("email_ok", ""), "https://estimio.streamlit.app")
-        if u:
-            st.sidebar.link_button("Abrir portal de Stripe", u)
-        else:
-            st.sidebar.error("No he podido abrir el portal. Intentalo de nuevo.")
-else:
-    restantes = max(LIMITE_GRATIS - st.session_state.generados, 0)
-    st.sidebar.write("Plan gratis: te quedan " + str(restantes) + " de " + str(LIMITE_GRATIS) + " presupuestos")
-    if enlace_pago():
-        st.sidebar.link_button("Hazte Pro 6,99 EUR/mes", enlace_pago())
-    email_pro = st.sidebar.text_input("Email con el que pagaste")
+if not st.session_state.email_ok:
+    st.sidebar.write("Entra con tu email para usar Estimio. Plan gratis: " + str(LIMITE_GRATIS) + " presupuestos al mes.")
+    email_pro = st.sidebar.text_input("Tu email")
     if st.sidebar.button("Enviar codigo"):
         ok, msg = enviar_codigo(email_pro)
         if ok:
@@ -56,14 +48,43 @@ else:
         else:
             st.sidebar.error(msg)
     codigo_pro = st.sidebar.text_input("Codigo de 6 digitos", max_chars=6)
-    if st.sidebar.button("Activar Pro"):
+    if st.sidebar.button("Entrar"):
         ok, msg = verificar_codigo(email_pro, codigo_pro)
         if ok:
-            st.session_state.premium = True
-            st.session_state.email_ok = email_pro.strip().lower()
+            email_limpio = email_pro.strip().lower()
+            st.session_state.email_ok = email_limpio
+            st.session_state.premium = es_premium(email_limpio)
+            st.session_state.usados = None if st.session_state.premium else usados_gratis(email_limpio)
             st.rerun()
         else:
             st.sidebar.error(msg)
+else:
+    st.sidebar.caption(st.session_state.email_ok)
+    if st.session_state.premium:
+        st.sidebar.success("Estimio Pro activo")
+        if st.sidebar.button("Gestionar suscripcion"):
+            u = url_portal(st.session_state.email_ok, "https://estimio.streamlit.app")
+            if u:
+                st.sidebar.link_button("Abrir portal de Stripe", u)
+            else:
+                st.sidebar.error("No he podido abrir el portal. Intentalo de nuevo.")
+    else:
+        usados = st.session_state.usados
+        if usados is None:
+            st.sidebar.warning("No he podido comprobar tu plan. Pulsa Salir y vuelve a entrar.")
+        else:
+            restantes = max(LIMITE_GRATIS - usados, 0)
+            st.sidebar.write("Plan gratis: te quedan " + str(restantes) + " de " + str(LIMITE_GRATIS) + " presupuestos este mes")
+        if enlace_pago():
+            st.sidebar.link_button("Hazte Pro 6,99 EUR/mes", enlace_pago())
+        if st.sidebar.button("Ya he pagado, actualizar"):
+            st.session_state.premium = es_premium(st.session_state.email_ok)
+            st.rerun()
+    if st.sidebar.button("Salir"):
+        st.session_state.email_ok = ""
+        st.session_state.premium = False
+        st.session_state.usados = None
+        st.rerun()
 
 oficio = st.selectbox("Oficio", list(OFICIOS.keys()), key="oficio", on_change=cambiar_oficio)
 datos = OFICIOS[oficio]
@@ -93,34 +114,45 @@ editado = editado.dropna(how="all")
 notas = st.text_area("Notas y condiciones de pago", value=datos["notas"], height=100)
 
 if st.button("Generar presupuesto", type="primary"):
-    limite = (not st.session_state.premium) and st.session_state.generados >= LIMITE_GRATIS
-    if limite:
-        st.warning("Has usado tus " + str(LIMITE_GRATIS) + " presupuestos gratis. Hazte Pro para seguir sin limite y sin marca de agua.")
-        if enlace_pago():
-            st.link_button("Ir a Estimio Pro", enlace_pago())
+    if not st.session_state.email_ok:
+        st.warning("Entra con tu email en la barra lateral para generar presupuestos.")
     else:
         try:
             df, total = calcular(editado)
         except ValueError as e:
             st.error(str(e))
         else:
-            cuota, total_final = calcular_iva(total, iva)
-            st.dataframe(df, width="stretch")
-            st.write("Base imponible: " + format(total, ".2f") + " EUR")
-            st.write("IVA " + str(iva) + "%: " + format(cuota, ".2f") + " EUR")
-            st.success("TOTAL: " + format(total_final, ".2f") + " EUR")
-            extras = "\n".join(k + ": " + v for k, v in extras_vals.items() if v.strip())
-            nombre = "presupuesto_" + numero.replace("/", "-") + ".pdf"
-            marca = not st.session_state.premium
-            pdf_bytes = crear_pdf(df, total, None, cliente, numero, iva, emisor, notas, oficio, extras, logo, marca)
-            if numero == sugerido:
-                st.session_state.n += 1
-            st.session_state.generados += 1
-            st.session_state.historial.insert(0, (nombre, pdf_bytes))
-            st.download_button("Descargar PDF", pdf_bytes, file_name=nombre, mime="application/pdf", key="descarga_actual")
-            if marca:
-                faltan = max(LIMITE_GRATIS - st.session_state.generados, 0)
-                st.info("Plan gratis: te quedan " + str(faltan) + " presupuestos. El PDF lleva marca de agua.")
+            permitido = True
+            if not st.session_state.premium:
+                n = usar_gratis(st.session_state.email_ok, LIMITE_GRATIS)
+                if n is None:
+                    permitido = False
+                    st.error("No he podido comprobar tu limite. Intentalo de nuevo en un momento.")
+                elif n < 0:
+                    permitido = False
+                    st.session_state.usados = LIMITE_GRATIS
+                    st.warning("Has usado tus " + str(LIMITE_GRATIS) + " presupuestos gratis de este mes. Hazte Pro para seguir sin limite y sin marca de agua.")
+                    if enlace_pago():
+                        st.link_button("Ir a Estimio Pro", enlace_pago())
+                else:
+                    st.session_state.usados = n
+            if permitido:
+                cuota, total_final = calcular_iva(total, iva)
+                st.dataframe(df, width="stretch")
+                st.write("Base imponible: " + format(total, ".2f") + " EUR")
+                st.write("IVA " + str(iva) + "%: " + format(cuota, ".2f") + " EUR")
+                st.success("TOTAL: " + format(total_final, ".2f") + " EUR")
+                extras = "\n".join(k + ": " + v for k, v in extras_vals.items() if v.strip())
+                nombre = "presupuesto_" + numero.replace("/", "-") + ".pdf"
+                marca = not st.session_state.premium
+                pdf_bytes = crear_pdf(df, total, None, cliente, numero, iva, emisor, notas, oficio, extras, logo, marca)
+                if numero == sugerido:
+                    st.session_state.n += 1
+                st.session_state.historial.insert(0, (nombre, pdf_bytes))
+                st.download_button("Descargar PDF", pdf_bytes, file_name=nombre, mime="application/pdf", key="descarga_actual")
+                if marca:
+                    faltan = max(LIMITE_GRATIS - st.session_state.usados, 0)
+                    st.info("Plan gratis: te quedan " + str(faltan) + " presupuestos este mes. El PDF lleva marca de agua.")
 
 st.sidebar.header("Presupuestos de esta sesión")
 if not st.session_state.historial:

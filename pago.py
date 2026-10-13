@@ -1,9 +1,11 @@
-﻿import hashlib
+﻿import datetime
+import hashlib
 import hmac
 import json
 import re
 import secrets
 import time
+import urllib.parse
 import urllib.request
 
 import streamlit as st
@@ -77,7 +79,7 @@ def _enviar_email(email, codigo):
         "from": "Estimio <no-reply@estimio.app>",
         "to": [email],
         "subject": "Tu codigo de Estimio: " + codigo,
-        "html": "<p>Tu codigo para activar Estimio Pro es:</p><h2>" + codigo + "</h2><p>Caduca en 10 minutos. Si no lo has pedido, ignora este correo.</p>",
+        "html": "<p>Tu codigo para entrar en Estimio es:</p><h2>" + codigo + "</h2><p>Caduca en 10 minutos. Si no lo has pedido, ignora este correo.</p>",
     }).encode("utf-8")
     req = urllib.request.Request(
         "https://api.resend.com/emails",
@@ -106,13 +108,15 @@ def enviar_codigo(email):
     s["cod_ultimo"] = ahora
     if not _limite_email(email):
         return False, "Has pedido demasiados codigos para ese email. Intentalo mas tarde."
-    if es_premium(email):
-        codigo = format(secrets.randbelow(1000000), "06d")
-        if _enviar_email(email, codigo):
-            s["cod_hash"] = _hash(email, codigo)
-            s["cod_expira"] = ahora + CODIGO_VALIDEZ
-            s["cod_intentos"] = 0
-    return True, "Si hay una suscripcion activa con ese email, te hemos enviado un codigo. Mira tambien en spam."
+    if not _limite_global():
+        return False, "Servicio ocupado. Intentalo mas tarde."
+    codigo = format(secrets.randbelow(1000000), "06d")
+    if not _enviar_email(email, codigo):
+        return False, "No he podido enviar el codigo. Intentalo de nuevo."
+    s["cod_hash"] = _hash(email, codigo)
+    s["cod_expira"] = ahora + CODIGO_VALIDEZ
+    s["cod_intentos"] = 0
+    return True, "Te hemos enviado un codigo. Mira tambien en spam."
 
 
 def verificar_codigo(email, codigo):
@@ -147,3 +151,66 @@ def url_portal(email, volver):
     except Exception:
         return ""
     return ""
+
+
+MAX_ENVIOS_DIA = 80
+
+
+@st.cache_resource
+def _contador_dia():
+    return {"dia": "", "n": 0}
+
+
+def _limite_global():
+    c = _contador_dia()
+    hoy = datetime.date.today().isoformat()
+    if c["dia"] != hoy:
+        c["dia"] = hoy
+        c["n"] = 0
+    if c["n"] >= MAX_ENVIOS_DIA:
+        return False
+    c["n"] += 1
+    return True
+
+
+def _mes():
+    return datetime.date.today().strftime("%Y-%m")
+
+
+def _supabase(metodo, ruta, cuerpo=None):
+    url = _secreto("SUPABASE_URL")
+    clave = _secreto("SUPABASE_SECRET_KEY")
+    if not url or not clave:
+        return None
+    datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None
+    req = urllib.request.Request(
+        url + "/rest/v1/" + ruta,
+        data=datos,
+        headers={"apikey": clave, "Content-Type": "application/json", "User-Agent": "Estimio/1.0"},
+        method=metodo,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode("utf-8") or "null")
+    except Exception:
+        return None
+
+
+def usados_gratis(email):
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    r = _supabase("GET", "uso_gratis?select=usados&email=eq." + urllib.parse.quote(email, safe="") + "&mes=eq." + _mes())
+    if r is None:
+        return None
+    return int(r[0]["usados"]) if r else 0
+
+
+def usar_gratis(email, limite):
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    r = _supabase("POST", "rpc/usar_gratis", {"p_email": email, "p_mes": _mes(), "p_limite": limite})
+    if r is None:
+        return None
+    return int(r)
