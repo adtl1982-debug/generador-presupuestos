@@ -1,0 +1,21 @@
+﻿PREGUNTAS PARA EL GESTOR - ESTIMIO
+
+ALTA DE AUTÓNOMO
+1. ¿Qué epígrafe del IAE me corresponde para vender una suscripción de software?
+2. ¿Puedo darme de alta ya o conviene esperar a tener los primeros ingresos?
+3. ¿Tengo tarifa plana de autónomo nuevo? ¿Es compatible con mi taller de bordados?
+4. ¿Cómo declaro dos actividades distintas, bordados y software?
+
+IVA DE LA SUSCRIPCIÓN
+5. Cobro 6,99 EUR/mes con IVA incluido. ¿Qué tipo de IVA aplico y qué base me queda?
+6. ¿Qué tengo que hacer con clientes de otros países de la UE? [OSS / ventanilla única]
+7. ¿Qué pasa con clientes fuera de la UE?
+8. ¿Cómo facturo: lo hace Stripe o tengo que emitir yo las facturas?
+
+STRIPE Y COBROS
+9. ¿Cómo declaro los ingresos que me llegan por Stripe?
+10. ¿Qué gastos puedo deducir? [dominio estimio.app, Supabase, Resend, etc.]
+
+OTROS
+11. ¿Necesito algo especial para la política de privacidad y la protección de datos?
+12. ¿Trimestres y modelos que tendré que presentar, y fechas?

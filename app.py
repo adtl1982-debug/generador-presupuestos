@@ -160,3 +160,18 @@ if not st.session_state.historial:
 for i, (nombre_pdf, datos_pdf) in enumerate(st.session_state.historial):
     st.sidebar.download_button(nombre_pdf, datos_pdf, file_name=nombre_pdf, mime="application/pdf", key="hist_" + str(i))
 st.sidebar.caption("Se borran al cerrar la página. Descarga cada PDF.")
+
+
+from pathlib import Path
+
+
+def _leer(nombre):
+    p = Path(__file__).parent / nombre
+    return p.read_text(encoding="utf-8-sig") if p.exists() else "Documento no disponible."
+
+
+st.divider()
+with st.expander("Política de privacidad"):
+    st.markdown(_leer("politica_privacidad.md"))
+with st.expander("Términos y condiciones"):
+    st.markdown(_leer("terminos.md"))
