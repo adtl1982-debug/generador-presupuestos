@@ -177,7 +177,7 @@ def _mes():
     return datetime.date.today().strftime("%Y-%m")
 
 
-def _supabase(metodo, ruta, cuerpo=None):
+def _supabase(metodo, ruta, cuerpo=None, extra=None):
     url = _secreto("SUPABASE_URL")
     clave = _secreto("SUPABASE_SECRET_KEY")
     if not url or not clave:
@@ -186,7 +186,7 @@ def _supabase(metodo, ruta, cuerpo=None):
     req = urllib.request.Request(
         url + "/rest/v1/" + ruta,
         data=datos,
-        headers={"apikey": clave, "Content-Type": "application/json", "User-Agent": "Estimio/1.0"},
+        headers={"apikey": clave, "Content-Type": "application/json", "User-Agent": "Estimio/1.0", **(extra or {})},
         method=metodo,
     )
     try:
@@ -214,3 +214,31 @@ def usar_gratis(email, limite):
     if r is None:
         return None
     return int(r)
+
+
+
+def cargar_precios(email, oficio):
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    r = _supabase("GET", "precios_usuario?select=conceptos&email=eq." + urllib.parse.quote(email, safe="") + "&oficio=eq." + urllib.parse.quote(oficio, safe=""))
+    if r is None:
+        return None
+    return r[0]["conceptos"] if r else []
+
+
+def guardar_precios(email, oficio, conceptos):
+    email = (email or "").strip().lower()
+    if not email or not conceptos:
+        return False
+    fila = [{"email": email, "oficio": oficio, "conceptos": conceptos, "actualizado": datetime.datetime.now(datetime.timezone.utc).isoformat()}]
+    r = _supabase("POST", "precios_usuario?on_conflict=email,oficio", fila, {"Prefer": "resolution=merge-duplicates,return=representation"})
+    return r is not None
+
+
+def borrar_precios(email, oficio):
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    r = _supabase("DELETE", "precios_usuario?email=eq." + urllib.parse.quote(email, safe="") + "&oficio=eq." + urllib.parse.quote(oficio, safe=""), None, {"Prefer": "return=representation"})
+    return r is not None

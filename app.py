@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 from presupuesto import calcular, crear_pdf, calcular_iva
 from oficios import OFICIOS
-from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo, url_portal, es_premium, usados_gratis, usar_gratis
+from pago import LIMITE_GRATIS, enlace_pago, enviar_codigo, verificar_codigo, url_portal, es_premium, usados_gratis, usar_gratis, cargar_precios, guardar_precios, borrar_precios
 
 st.set_page_config(page_title="Estimio")
 st.title("Estimio")
@@ -16,8 +16,17 @@ def tabla_inicial():
     return pd.DataFrame({"producto": ["Concepto 1"], "unidad": ["ud"], "precio": [0.0], "cantidad": [1], "descuento": [0.0]})[COLS]
 
 
+def conceptos_oficio(nombre):
+    conceptos = OFICIOS[nombre]["conceptos"]
+    if st.session_state.premium and st.session_state.email_ok:
+        guardados = cargar_precios(st.session_state.email_ok, nombre)
+        if guardados:
+            return [(g[0], g[1], float(g[2])) for g in guardados]
+    return conceptos
+
+
 def cambiar_oficio():
-    conceptos = OFICIOS[st.session_state.oficio]["conceptos"]
+    conceptos = conceptos_oficio(st.session_state.oficio)
     if conceptos:
         t = pd.DataFrame(conceptos, columns=["producto", "unidad", "precio"])
         t["cantidad"] = 1
@@ -55,6 +64,8 @@ if not st.session_state.email_ok:
             st.session_state.email_ok = email_limpio
             st.session_state.premium = es_premium(email_limpio)
             st.session_state.usados = None if st.session_state.premium else usados_gratis(email_limpio)
+            if st.session_state.premium and "oficio" in st.session_state:
+                cambiar_oficio()
             st.rerun()
         else:
             st.sidebar.error(msg)
@@ -110,6 +121,31 @@ for etiqueta in datos["extras"]:
 st.subheader("Conceptos")
 editado = st.data_editor(st.session_state.base, num_rows="dynamic", width="stretch", key="tabla_" + str(st.session_state.version))
 editado = editado.dropna(how="all")
+
+if st.session_state.premium:
+    cb1, cb2 = st.columns(2)
+    if cb1.button("Guardar mis precios"):
+        filas = []
+        for _, f in editado.iterrows():
+            nombre_c = str(f["producto"]).strip()
+            if nombre_c and nombre_c != "nan":
+                precio_c = pd.to_numeric(f["precio"], errors="coerce")
+                filas.append([nombre_c[:120], str(f["unidad"])[:20], 0.0 if pd.isna(precio_c) else float(precio_c)])
+        filas = filas[:60]
+        if not filas:
+            st.warning("No hay conceptos que guardar.")
+        elif guardar_precios(st.session_state.email_ok, oficio, filas):
+            st.success("Precios guardados para " + oficio)
+        else:
+            st.error("No he podido guardar. Intentalo de nuevo.")
+    if cb2.button("Restablecer precios"):
+        if borrar_precios(st.session_state.email_ok, oficio):
+            cambiar_oficio()
+            st.rerun()
+        else:
+            st.error("No he podido restablecer. Intentalo de nuevo.")
+else:
+    st.caption("Guardar tus precios para no repetirlos es parte de Estimio Pro.")
 
 notas = st.text_area("Notas y condiciones de pago", value=datos["notas"], height=100)
 
@@ -175,3 +211,4 @@ with st.expander("Política de privacidad"):
     st.markdown(_leer("politica_privacidad.md"))
 with st.expander("Términos y condiciones"):
     st.markdown(_leer("terminos.md"))
+

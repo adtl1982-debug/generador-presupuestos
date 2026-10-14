@@ -13,6 +13,7 @@
 - El número de presupuestos gratuitos que has usado en el mes, asociado a tu correo.
 - Si contratas Estimio Pro: los datos de la suscripción que gestiona Stripe. Nosotros no vemos ni guardamos los datos de tu tarjeta.
 - Los datos que escribes en cada presupuesto [clientes, importes, logo] no se guardan en nuestros servidores. Solo se usan durante tu sesión y se borran al cerrar la página.
+- Si eres Pro y pulsas Guardar mis precios, guardamos tus precios por oficio [concepto, unidad y precio] asociados a tu email. Puedes borrarlos cuando quieras con Restablecer precios.
 
 ## 3. Para qué los usamos
 - Darte acceso a la app y verificar tu correo.
@@ -41,4 +42,5 @@ Estimio usa solo las cookies técnicas necesarias para que funcione la sesión. 
 
 ## 8. Cambios
 Si cambiamos esta política, actualizaremos la fecha de arriba.
+
 
